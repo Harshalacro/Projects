@@ -1,0 +1,9 @@
+{
+  "name": "P&D Construction – Attendance",
+  "short_name": "P&D Attendance",
+  "start_url": "/attendance",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#f59e0b",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

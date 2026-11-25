@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+html { -webkit-tap-highlight-color: transparent; }
+body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Devanagari", sans-serif; }
+button { cursor: pointer; touch-action: manipulation; }
+
+@media print {
+  body { background: #fff; }
+  @page { size: A4 landscape; margin: 10mm; }
+}
