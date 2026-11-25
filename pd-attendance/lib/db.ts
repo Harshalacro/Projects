@@ -1,6 +1,6 @@
 "use client";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type { Advance, Attendance, Payment, Profile, Snapshot, Status, WageHistory, Worker } from "./types";
+import type { Advance, Attendance, DailyReport, Material, Payment, Profile, RowKey, RowOf, Site, Snapshot, Status, StockEntry, WageHistory, Worker, Reminder } from "./types";
 import { addDays, monthOf, today } from "./dates";
 
 /**
@@ -21,9 +21,15 @@ export interface DB {
   deleteAdvance(id: string): Promise<void>;
   savePayment(p: Omit<Payment, "id">): Promise<Payment>;
   deletePayment(id: string): Promise<void>;
+  put<K extends RowKey>(key: K, row: RowOf<K>): Promise<void>;
+  del(key: RowKey, id: string): Promise<void>;
+  saveReport(r: DailyReport): Promise<void>;
+  deleteReport(id: string): Promise<void>;
 }
 
-const uid = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now());
+const TABLE: Record<RowKey, string> = { sites: "sites", reminders: "reminders", materials: "materials", stock: "stock_entries" };
+
+import { newId as uid } from "./id";
 const EPOCH = "2000-01-01";
 
 // ---------------------------------------------------------------- demo (localStorage)
@@ -49,21 +55,50 @@ function seed(): Snapshot {
     }
   });
   advances.push({ id: uid(), worker_id: workers[1].id, date: `${pm}-10`, amount: 2000, note: "paiseli" });
-  return { workers, wages, attendance, advances, payments: [] };
+  return { workers, wages, attendance, advances, payments: [], ...seedSites() };
+}
+
+function seedSites() {
+  const t = today();
+  const sites: Site[] = [
+    { id: uid(), name: "Balaji Colony", address: "Plot 12, Balaji Colony", start_date: addDays(t, -60), status: "Running" },
+    { id: uid(), name: "Shivaji Nagar House", address: "Lane 4, Shivaji Nagar", start_date: addDays(t, -20), status: "Running" },
+  ];
+  const mat = (site: number, name: string, unit: string, low: number): Material => ({ id: uid(), site_id: sites[site].id, name, unit, low_stock_limit: low });
+  const materials = [mat(0, "Cement", "bags", 20), mat(0, "Sand", "trucks", 1), mat(0, "Bricks", "pcs", 500), mat(1, "Steel", "kg", 100)];
+  const e = (m: number, type: "IN" | "OUT", quantity: number, d: number, note = ""): StockEntry => ({ id: uid(), material_id: materials[m].id, date: addDays(t, d), type, quantity, note });
+  const stock = [e(0, "IN", 100, -10), e(0, "OUT", 85, -2, "slab"), e(1, "IN", 3, -8), e(1, "OUT", 1, -3), e(2, "IN", 2000, -9), e(2, "OUT", 1200, -4), e(3, "IN", 500, -5)];
+  const reminders: Reminder[] = [
+    { id: uid(), site_id: sites[0].id, text: "Buy 50 bags cement", due_date: addDays(t, -1), done: false },
+    { id: uid(), site_id: sites[0].id, text: "Pay the electrician", due_date: addDays(t, 3), done: false },
+    { id: uid(), site_id: sites[1].id, text: "Order bricks", due_date: addDays(t, 1), done: false },
+  ];
+  const reports: DailyReport[] = [
+    { id: uid(), site_id: sites[0].id, date: addDays(t, -1), notes: "Slab shuttering finished. Plastering started on ground floor.", workers_count: 4, created_by: "Demo Owner", photos: [] },
+  ];
+  return { sites, reports, reminders, materials, stock };
 }
 
 function demoDB(): DB {
   const read = (): Snapshot => {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (!parsed.sites) { const m = { ...parsed, ...seedSites() }; write(m); return m; }
+        return parsed;
+      }
     } catch {}
     const s = seed();
     write(s);
     return s;
   };
   const write = (s: Snapshot) => {
-    try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {}
+    try {
+      localStorage.setItem(KEY, JSON.stringify(s));
+    } catch {
+      throw new Error("Browser storage is full (demo mode). Use Supabase for photos.");
+    }
   };
   return {
     mode: "demo",
@@ -105,6 +140,34 @@ function demoDB(): DB {
       return r;
     },
     async deletePayment(id) { const s = read(); s.payments = s.payments.filter((x) => x.id !== id); write(s); },
+    async put(key, row) {
+      const s = read();
+      const list = s[key] as { id: string }[];
+      const i = list.findIndex((x) => x.id === row.id);
+      if (i >= 0) list[i] = row; else list.push(row);
+      write(s);
+    },
+    async del(key, id) {
+      const s = read();
+      (s[key] as { id: string }[]) = (s[key] as { id: string }[]).filter((x) => x.id !== id);
+      if (key === "materials") s.stock = s.stock.filter((e) => e.material_id !== id);
+      if (key === "sites") {
+        const mats = s.materials.filter((m) => m.site_id === id).map((m) => m.id);
+        s.materials = s.materials.filter((m) => m.site_id !== id);
+        s.stock = s.stock.filter((e) => !mats.includes(e.material_id));
+        s.reports = s.reports.filter((r) => r.site_id !== id);
+        s.reminders = s.reminders.filter((r) => r.site_id !== id);
+        s.workers = s.workers.map((w) => (w.default_site_id === id ? { ...w, default_site_id: null } : w));
+      }
+      write(s);
+    },
+    async saveReport(r) {
+      const s = read();
+      const i = s.reports.findIndex((x) => x.id === r.id);
+      if (i >= 0) s.reports[i] = r; else s.reports.push(r);
+      write(s);
+    },
+    async deleteReport(id) { const s = read(); s.reports = s.reports.filter((x) => x.id !== id); write(s); },
   };
 }
 
@@ -142,14 +205,21 @@ function supabaseDB(url: string, key: string): DB {
     },
     async signOut() { await sb.auth.signOut(); },
     async loadAll() {
-      const [workers, wages, attendance, advances, payments] = await Promise.all([
+      const [workers, wages, attendance, advances, payments, sites, reps, photos, reminders, materials, stock] = await Promise.all([
         fetchAll<Worker>(sb, "workers"),
         fetchAll<WageHistory>(sb, "wage_history"),
         fetchAll<Attendance>(sb, "attendance"),
         fetchAll<Advance>(sb, "advances"),
         fetchAll<Payment>(sb, "payments"),
+        fetchAll<Site>(sb, "sites"),
+        fetchAll<Omit<DailyReport, "photos">>(sb, "daily_reports"),
+        fetchAll<{ report_id: string; photo_url: string }>(sb, "report_photos"),
+        fetchAll<Reminder>(sb, "reminders"),
+        fetchAll<Material>(sb, "materials"),
+        fetchAll<StockEntry>(sb, "stock_entries"),
       ]);
-      return { workers, wages, attendance, advances, payments };
+      const reports = reps.map((r) => ({ ...r, photos: photos.filter((p) => p.report_id === r.id).map((p) => p.photo_url) }));
+      return { workers, wages, attendance, advances, payments, sites, reports, reminders, materials, stock };
     },
     async saveWorker(w) {
       const isNew = !w.id;
@@ -181,6 +251,31 @@ function supabaseDB(url: string, key: string): DB {
     async deleteAdvance(id) { const { error } = await sb.from("advances").delete().eq("id", id); if (error) throw new Error(error.message); },
     async savePayment(p) { return must(await sb.from("payments").insert(p).select().single()) as Payment; },
     async deletePayment(id) { const { error } = await sb.from("payments").delete().eq("id", id); if (error) throw new Error(error.message); },
+    async put(key, row) {
+      const { error } = await sb.from(TABLE[key]).upsert(row);
+      if (error) throw new Error(error.message);
+    },
+    async del(key, id) {
+      const { error } = await sb.from(TABLE[key]).delete().eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+    async saveReport(r) {
+      const { photos, ...row } = r;
+      must(await sb.from("daily_reports").upsert(row).select().single());
+      const { data: existing } = await sb.from("report_photos").select("id, photo_url").eq("report_id", r.id);
+      const keep = new Set(photos.filter((p) => !p.startsWith("data:")));
+      const gone = (existing ?? []).filter((e) => !keep.has(e.photo_url)).map((e) => e.id);
+      if (gone.length) await sb.from("report_photos").delete().in("id", gone);
+      for (const p of photos.filter((p) => p.startsWith("data:"))) {
+        const blob = await (await fetch(p)).blob();
+        const path = `${r.id}/${uid()}.jpg`;
+        const up = await sb.storage.from("report-photos").upload(path, blob, { contentType: "image/jpeg" });
+        if (up.error) throw new Error(up.error.message);
+        const url = sb.storage.from("report-photos").getPublicUrl(path).data.publicUrl;
+        must(await sb.from("report_photos").insert({ report_id: r.id, photo_url: url }).select());
+      }
+    },
+    async deleteReport(id) { const { error } = await sb.from("daily_reports").delete().eq("id", id); if (error) throw new Error(error.message); },
   };
 }
 

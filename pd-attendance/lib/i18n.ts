@@ -30,6 +30,14 @@ export const LABELS = {
   password: ["Password", "पासवर्ड"],
   logout: ["Logout", "बाहर"],
   today: ["Today", "आज"],
+  addSite: ["Add site", "साइट जोड़ें"],
+  dailyReport: ["Daily report", "रोज़ की रिपोर्ट"],
+  reminders: ["Reminders", "याद दिलाना"],
+  stock: ["Stock", "माल"],
+  workersOnSite: ["Workers", "मज़दूर"],
+  stockIn: ["Stock IN", "माल आया"],
+  stockOut: ["Stock OUT", "माल लगा"],
+  lowStock: ["Low stock", "माल कम है"],
   grandTotal: ["Grand total", "कुल योग"],
 } as const;
 export type LabelKey = keyof typeof LABELS;

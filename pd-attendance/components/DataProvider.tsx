@@ -1,10 +1,10 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { getDB } from "@/lib/db";
-import type { Advance, Payment, Profile, Snapshot, Status, Worker } from "@/lib/types";
+import type { Advance, DailyReport, Payment, Profile, RowKey, RowOf, Snapshot, Status, Worker } from "@/lib/types";
 
-const EMPTY: Snapshot = { workers: [], wages: [], attendance: [], advances: [], payments: [] };
-const uid = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+const EMPTY: Snapshot = { workers: [], wages: [], attendance: [], advances: [], payments: [], sites: [], reports: [], reminders: [], materials: [], stock: [] };
+import { newId as uid } from "@/lib/id";
 
 interface Ctx {
   ready: boolean;
@@ -22,6 +22,10 @@ interface Ctx {
   deleteAdvance(id: string): Promise<void>;
   savePayment(p: Omit<Payment, "id">): Promise<void>;
   deletePayment(id: string): Promise<void>;
+  put<K extends RowKey>(key: K, row: RowOf<K>): Promise<void>;
+  del(key: RowKey, id: string): Promise<void>;
+  saveReport(r: DailyReport): Promise<void>;
+  deleteReport(id: string): Promise<void>;
   resetDemo(): void;
 }
 const C = createContext<Ctx | null>(null);
@@ -123,6 +127,27 @@ export function DataProvider({ children }: { children: ReactNode }) {
     async deleteAdvance(id) { await db.deleteAdvance(id).catch((e) => setError("Could not delete: " + e.message)); await reload(); },
     async savePayment(p) { await db.savePayment(p).catch((e) => setError("Could not save: " + e.message)); await reload(); },
     async deletePayment(id) { await db.deletePayment(id).catch((e) => setError("Could not delete: " + e.message)); await reload(); },
+    put(key, row) {
+      return run(
+        (s) => {
+          const list = s[key] as { id: string }[];
+          const next = list.some((x) => x.id === row.id) ? list.map((x) => (x.id === row.id ? row : x)) : [...list, row];
+          return { ...s, [key]: next };
+        },
+        () => db.put(key, row),
+      );
+    },
+    async del(key, id) {
+      await run((s) => ({ ...s, [key]: (s[key] as { id: string }[]).filter((x) => x.id !== id) }), () => db.del(key, id));
+      if (key === "sites" || key === "materials") await reload();
+    },
+    async saveReport(r) {
+      try { await db.saveReport(r); setError(null); } catch (e) { setError("Could not save: " + (e as Error).message); }
+      await reload();
+    },
+    async deleteReport(id) {
+      await run((s) => ({ ...s, reports: s.reports.filter((r) => r.id !== id) }), () => db.deleteReport(id));
+    },
     resetDemo() {
       try { localStorage.removeItem("pd-demo-db-v1"); } catch {}
       location.reload();

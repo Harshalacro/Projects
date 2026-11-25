@@ -14,6 +14,7 @@ export function WorkerForm({ worker, onClose }: { worker?: Worker; onClose: () =
   const [wage, setWage] = useState(String(worker?.daily_wage ?? ""));
   const [phone, setPhone] = useState(worker?.phone ?? "");
   const [active, setActive] = useState(worker?.active ?? true);
+  const [siteId, setSiteId] = useState(worker?.default_site_id ?? "");
   const types = Array.from(new Set([...TYPES, ...snap.workers.map((w) => w.type)]));
   const valid = name.trim() && (!isAdmin || Number(wage) > 0 || !!worker);
 
@@ -30,7 +31,7 @@ export function WorkerForm({ worker, onClose }: { worker?: Worker; onClose: () =
             daily_wage: isAdmin ? Number(wage) || 0 : worker?.daily_wage ?? 0,
             phone: phone.trim(),
             active,
-            default_site_id: worker?.default_site_id ?? null,
+            default_site_id: siteId || null,
           });
           onClose();
         }}
@@ -56,6 +57,14 @@ export function WorkerForm({ worker, onClose }: { worker?: Worker; onClose: () =
         <label className="block text-sm font-semibold"><T k="phone" />
           <input className={inputCls} inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </label>
+        {snap.sites.length > 0 && (
+          <label className="block text-sm font-semibold">Site (optional)
+            <select className={inputCls} value={siteId} onChange={(e) => setSiteId(e.target.value)}>
+              <option value="">— none —</option>
+              {snap.sites.filter((s) => s.status !== "Finished" || s.id === siteId).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </label>
+        )}
         {worker && (
           <label className="flex items-center gap-3 text-base font-semibold">
             <input type="checkbox" className="h-6 w-6" checked={active} onChange={(e) => setActive(e.target.checked)} />
