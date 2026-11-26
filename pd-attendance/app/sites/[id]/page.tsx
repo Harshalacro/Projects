@@ -4,7 +4,7 @@ import { Shell } from "@/components/Shell";
 import { useData } from "@/components/DataProvider";
 import { SiteForm, STATUS_BADGE } from "@/components/SiteForm";
 import { T } from "@/components/T";
-import { btnGhost } from "@/components/Modal";
+import { Icon } from "@/components/Icon";
 import { ReportsTab } from "@/components/site/ReportsTab";
 import { RemindersTab } from "@/components/site/RemindersTab";
 import { StockTab } from "@/components/site/StockTab";
@@ -35,19 +35,19 @@ export default function SitePage({ params }: { params: Promise<{ id: string }> }
 
   return (
     <Shell title={site.name} back="/sites">
-      <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-white p-3 shadow-sm">
+      <div className="card mb-4 flex items-center justify-between gap-2 p-4">
         <div className="min-w-0 text-sm text-slate-600">
-          <div className="truncate">{site.address || "No address"}</div>
+          <div className="flex items-center gap-1.5 truncate"><Icon name="mappin" className="h-4 w-4 shrink-0" />{site.address || "No address"}</div>
           <span className={`mt-1 inline-block rounded-full px-3 py-0.5 text-xs font-bold ${STATUS_BADGE[site.status]}`}>{site.status}</span>
         </div>
-        <button className={btnGhost} onClick={() => setEditing(true)}>Edit</button>
+        <button className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold hover:bg-slate-50" onClick={() => setEditing(true)}><Icon name="edit" className="h-4 w-4" /> <T k="edit" hi={false} /></button>
       </div>
 
-      <div className="mb-3 grid grid-cols-4 gap-1 rounded-xl bg-slate-300 p-1">
+      <div className="mb-4 grid grid-cols-4 gap-1 rounded-2xl bg-slate-200 p-1">
         {TABS.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`relative rounded-lg px-1 py-3 text-[13px] font-bold leading-tight ${tab === t.id ? "bg-amber-500 text-slate-900" : "bg-white text-slate-700"}`}>
+          <button key={t.id} onClick={() => setTab(t.id)} className={`relative rounded-xl px-1 py-3 text-[13px] font-bold leading-tight transition ${tab === t.id ? "bg-white text-slate-900 shadow" : "text-slate-600 hover:bg-slate-100"}`}>
             <T k={t.key} hi={false} />
-            {badge[t.id] > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-red-600 px-1.5 text-xs text-white">{badge[t.id]}</span>}
+            {badge[t.id] > 0 && <span className="absolute -right-0.5 -top-1 min-w-5 rounded-full bg-red-600 px-1.5 text-xs font-bold text-white">{badge[t.id]}</span>}
           </button>
         ))}
       </div>

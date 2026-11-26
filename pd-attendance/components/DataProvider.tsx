@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { getDB } from "@/lib/db";
 import type { Advance, DailyReport, Payment, Profile, RowKey, RowOf, Snapshot, Status, Worker } from "@/lib/types";
 
@@ -13,6 +13,8 @@ interface Ctx {
   mode: "demo" | "supabase";
   snap: Snapshot;
   error: string | null;
+  online: boolean;
+  pending: number;
   signIn(phone: string, password: string): Promise<string | null>;
   signOut(): Promise<void>;
   saveWorker(w: Omit<Worker, "id"> & { id?: string }): Promise<void>;
@@ -41,6 +43,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [snap, setSnap] = useState<Snapshot>(EMPTY);
   const [error, setError] = useState<string | null>(null);
+  const online = useSyncExternalStore(
+    (cb) => { window.addEventListener("online", cb); window.addEventListener("offline", cb); return () => { window.removeEventListener("online", cb); window.removeEventListener("offline", cb); }; },
+    () => navigator.onLine,
+    () => true,
+  );
+  const [pending, setPending] = useState(0);
 
   const reload = useCallback(async () => {
     try {
@@ -50,6 +58,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setError((e as Error).message);
     }
   }, [db]);
+
+  // Online/offline status + automatic sync of changes saved while offline.
+  useEffect(() => {
+    const on = () => { reload(); };
+    window.addEventListener("online", on);
+    const t = setInterval(() => {
+      const n = db.pending?.() ?? 0;
+      setPending(n);
+      if (n > 0 && navigator.onLine) reload();
+    }, 4000);
+    return () => { window.removeEventListener("online", on); clearInterval(t); };
+  }, [db, reload]);
 
   useEffect(() => {
     (async () => {
@@ -79,6 +99,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     mode: db.mode,
     snap,
     error,
+    online,
+    pending,
     async signIn(phone, password) {
       const err = await db.signIn(phone, password);
       if (err) return err;

@@ -36,29 +36,29 @@ export function WorkerForm({ worker, onClose }: { worker?: Worker; onClose: () =
           onClose();
         }}
       >
-        <label className="block text-sm font-semibold"><T k="name" />
+        <label className="label"><T k="name" />
           <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </label>
         <div>
           <div className="text-sm font-semibold"><T k="type" /></div>
           <div className="mt-1 flex flex-wrap gap-2">
             {types.map((t) => (
-              <button type="button" key={t} onClick={() => setType(t)} className={`rounded-xl border-2 px-4 py-3 text-base font-semibold ${type === t ? "border-amber-500 bg-amber-100" : "border-slate-300 bg-white"}`}>{t}</button>
+              <button type="button" key={t} onClick={() => setType(t)} className={`rounded-xl border px-4 py-3 text-base font-semibold ${type === t ? "border-amber-500 bg-amber-100" : "border-slate-300 bg-white"}`}>{t}</button>
             ))}
           </div>
           <input className={`${inputCls} mt-2`} value={type} onChange={(e) => setType(e.target.value)} placeholder="Other type…" />
         </div>
         {isAdmin && (
-          <label className="block text-sm font-semibold"><T k="wage" /> (₹)
+          <label className="label"><T k="wage" /> (₹)
             <input className={inputCls} inputMode="numeric" value={wage} onChange={(e) => setWage(e.target.value.replace(/[^\d.]/g, ""))} />
             {worker && <span className="text-xs font-normal text-slate-500">Changing the wage applies from today. Old days keep the old wage.</span>}
           </label>
         )}
-        <label className="block text-sm font-semibold"><T k="phone" />
+        <label className="label"><T k="phone" />
           <input className={inputCls} inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </label>
         {snap.sites.length > 0 && (
-          <label className="block text-sm font-semibold">Site (optional)
+          <label className="label">Site (optional)
             <select className={inputCls} value={siteId} onChange={(e) => setSiteId(e.target.value)}>
               <option value="">— none —</option>
               {snap.sites.filter((s) => s.status !== "Finished" || s.id === siteId).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}

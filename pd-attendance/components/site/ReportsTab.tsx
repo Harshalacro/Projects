@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
+import { Icon } from "../Icon";
 import { useData } from "../DataProvider";
 import { Modal, btnGhost, btnPrimary, inputCls } from "../Modal";
 import { T } from "../T";
@@ -16,14 +17,14 @@ export function ReportsTab({ siteId }: { siteId: string }) {
 
   return (
     <div>
-      <button className={`${btnPrimary} mb-3`} onClick={() => setEditing("new")}>＋ Write today’s report</button>
-      {reports.length === 0 && <p className="rounded-xl bg-white p-6 text-center text-slate-600">No reports yet.</p>}
+      <button className={`${btnPrimary} mb-3`} onClick={() => setEditing("new")}><Icon name="plus" /> <T k="writeReport" /></button>
+      {reports.length === 0 && <p className="card p-6 text-center text-slate-600">No reports yet.</p>}
       <ul className="space-y-3">
         {reports.map((r) => (
-          <li key={r.id} className="rounded-xl bg-white p-3 shadow-sm">
+          <li key={r.id} className="card p-3 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="font-bold">{dateLabel(r.date)}</div>
-              <div className="rounded-lg bg-slate-100 px-2 py-1 text-sm font-semibold">👷 {r.workers_count}</div>
+              <div className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 text-sm font-semibold"><Icon name="users" className="h-4 w-4" /> {r.workers_count}</div>
             </div>
             <p className="mt-2 whitespace-pre-wrap text-base">{r.notes || <span className="text-slate-400">No notes</span>}</p>
             {r.photos.length > 0 && (
@@ -91,13 +92,13 @@ function ReportForm({ siteId, report, onClose }: { siteId: string; report?: Dail
         await saveReport({ id: report?.id ?? newId(), site_id: siteId, date, notes: notes.trim(), workers_count: Number(count) || 0, created_by: report?.created_by ?? profile?.name ?? "", photos });
         onClose();
       }}>
-        <label className="block text-sm font-semibold">Date
+        <label className="label">Date
           <input type="date" className={inputCls} value={date} max={today()} onChange={(e) => { setDate(e.target.value); if (!touched) setCount(String(presentOn(e.target.value))); }} />
         </label>
-        <label className="block text-sm font-semibold">Work done
+        <label className="label">Work done
           <textarea className={inputCls} rows={4} autoFocus placeholder="Slab shuttering done, plastering started…" value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>
-        <label className="block text-sm font-semibold">How many workers came
+        <label className="label">How many workers came
           <input className={inputCls} inputMode="numeric" value={count} onChange={(e) => { setTouched(true); setCount(e.target.value.replace(/\D/g, "")); }} />
           {!touched && <span className="text-xs font-normal text-slate-500">Filled from today’s attendance. You can change it.</span>}
         </label>
@@ -113,7 +114,7 @@ function ReportForm({ siteId, report, onClose }: { siteId: string; report?: Dail
             ))}
           </div>
           <input ref={file} type="file" accept="image/*" capture="environment" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-          <button type="button" className={`${btnGhost} mt-2 w-full`} onClick={() => file.current?.click()} disabled={busy}>📷 Add photo</button>
+          <button type="button" className={`${btnGhost} mt-2 w-full`} onClick={() => file.current?.click()} disabled={busy}><Icon name="camera" className="h-5 w-5" /> Add photo</button>
           {err && <p className="mt-1 text-sm text-red-600">{err}</p>}
         </div>
         <button className={btnPrimary} disabled={busy || (!notes.trim() && photos.length === 0)}>{busy ? "Please wait…" : <T k="save" />}</button>

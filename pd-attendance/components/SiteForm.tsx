@@ -22,13 +22,13 @@ export function SiteForm({ site, onClose }: { site?: Site; onClose: () => void }
         await put("sites", { id: site?.id ?? newId(), name: name.trim(), address: address.trim(), start_date: start, status });
         onClose();
       }}>
-        <label className="block text-sm font-semibold">Site name (e.g. Balaji Colony)
+        <label className="label">Site name (e.g. Balaji Colony)
           <input className={inputCls} autoFocus value={name} onChange={(e) => setName(e.target.value)} />
         </label>
-        <label className="block text-sm font-semibold">Address
+        <label className="label">Address
           <input className={inputCls} value={address} onChange={(e) => setAddress(e.target.value)} />
         </label>
-        <label className="block text-sm font-semibold">Start date
+        <label className="label">Start date
           <input type="date" className={inputCls} value={start} onChange={(e) => setStart(e.target.value)} />
         </label>
         <div className="flex gap-2">

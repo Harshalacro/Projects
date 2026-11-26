@@ -2,6 +2,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Advance, Attendance, DailyReport, Material, Payment, Profile, RowKey, RowOf, Site, Snapshot, Status, StockEntry, WageHistory, Worker, Reminder } from "./types";
 import { addDays, monthOf, today } from "./dates";
+import { offlineDB } from "./offline";
 
 /**
  * Two interchangeable backends:
@@ -17,14 +18,16 @@ export interface DB {
   saveWorker(w: Omit<Worker, "id"> & { id?: string }): Promise<Worker>;
   setAttendance(workerId: string, date: string, status: Status | null, siteId?: string | null): Promise<void>;
   setAttendanceBulk(workerIds: string[], date: string, status: Status): Promise<void>;
-  addAdvance(a: Omit<Advance, "id">): Promise<Advance>;
+  addAdvance(a: Omit<Advance, "id"> & { id?: string }): Promise<Advance>;
   deleteAdvance(id: string): Promise<void>;
-  savePayment(p: Omit<Payment, "id">): Promise<Payment>;
+  savePayment(p: Omit<Payment, "id"> & { id?: string }): Promise<Payment>;
   deletePayment(id: string): Promise<void>;
   put<K extends RowKey>(key: K, row: RowOf<K>): Promise<void>;
   del(key: RowKey, id: string): Promise<void>;
   saveReport(r: DailyReport): Promise<void>;
   deleteReport(id: string): Promise<void>;
+  /** Number of changes saved on this phone that are still waiting to reach the server. */
+  pending?(): number;
 }
 
 const TABLE: Record<RowKey, string> = { sites: "sites", reminders: "reminders", materials: "materials", stock: "stock_entries" };
@@ -79,29 +82,36 @@ function seedSites() {
   return { sites, reports, reminders, materials, stock };
 }
 
-function demoDB(): DB {
+export interface LocalDB extends DB {
+  replaceAll(s: Snapshot): void;
+}
+
+/** A complete DB living in localStorage. Used for demo mode, and as the offline cache under Supabase. */
+export function localDB(key = KEY, mode: DB["mode"] = "demo", seedIfEmpty = true): LocalDB {
+  const empty = (): Snapshot => ({ workers: [], wages: [], attendance: [], advances: [], payments: [], sites: [], reports: [], reminders: [], materials: [], stock: [] });
   const read = (): Snapshot => {
     try {
-      const raw = localStorage.getItem(KEY);
+      const raw = localStorage.getItem(key);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (!parsed.sites) { const m = { ...parsed, ...seedSites() }; write(m); return m; }
+        if (!parsed.sites) { const m = { ...parsed, ...(seedIfEmpty ? seedSites() : { sites: [], reports: [], reminders: [], materials: [], stock: [] }) }; write(m); return m; }
         return parsed;
       }
     } catch {}
-    const s = seed();
-    write(s);
+    const s = seedIfEmpty ? seed() : empty();
+    if (seedIfEmpty) write(s);
     return s;
   };
   const write = (s: Snapshot) => {
     try {
-      localStorage.setItem(KEY, JSON.stringify(s));
+      localStorage.setItem(key, JSON.stringify(s));
     } catch {
-      throw new Error("Browser storage is full (demo mode). Use Supabase for photos.");
+      throw new Error("Phone storage is full. Delete some old photos or reports.");
     }
   };
   return {
-    mode: "demo",
+    mode,
+    replaceAll(s) { write(s); },
     async getProfile() { return { name: "Demo Owner", role: "admin" }; },
     async signIn() { return null; },
     async signOut() {},
@@ -130,11 +140,11 @@ function demoDB(): DB {
       ids.forEach((id) => s.attendance.push({ id: uid(), worker_id: id, date, status, site_id: null }));
       write(s);
     },
-    async addAdvance(a) { const s = read(); const r = { ...a, id: uid() }; s.advances.push(r); write(s); return r; },
+    async addAdvance(a) { const s = read(); const r = { ...a, id: a.id ?? uid() }; s.advances.push(r); write(s); return r; },
     async deleteAdvance(id) { const s = read(); s.advances = s.advances.filter((x) => x.id !== id); write(s); },
     async savePayment(p) {
       const s = read();
-      const r = { ...p, id: uid() };
+      const r = { ...p, id: p.id ?? uid() };
       s.payments.push(r);
       write(s);
       return r;
@@ -194,9 +204,12 @@ function supabaseDB(url: string, key: string): DB {
   return {
     mode: "supabase",
     async getProfile() {
-      const { data: u } = await sb.auth.getUser();
-      if (!u.user) return null;
-      const { data } = await sb.from("users").select("name, role").eq("id", u.user.id).maybeSingle();
+      // getSession reads the saved login from the phone, so it also works with no signal.
+      const { data: sess } = await sb.auth.getSession();
+      const user = sess.session?.user;
+      if (!user) return null;
+      const { data, error } = await sb.from("users").select("name, role").eq("id", user.id).maybeSingle();
+      if (error) throw new Error(error.message);
       return { name: data?.name ?? "User", role: (data?.role as Profile["role"]) ?? "supervisor" };
     },
     async signIn(phone, password) {
@@ -284,7 +297,7 @@ export function getDB(): DB {
   if (instance) return instance;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  instance = url && key ? supabaseDB(url, key) : demoDB();
+  instance = url && key ? offlineDB(supabaseDB(url, key), localDB("pd-cache-v1", "supabase", false)) : localDB();
   return instance;
 }
 
